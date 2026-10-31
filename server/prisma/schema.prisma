@@ -1,0 +1,372 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                 String               @id
+  name               String
+  email              String               @unique
+  emailVerified      Boolean              @default(false)
+  image              String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  sessions           Session[]
+  accounts           Account[]
+  profile            UserProfile?
+  settings           UserSettings?
+  studentData        StudentData?
+  subjects           Subject[]
+  timetable          TimetableEntry[]
+  attendanceRecords  AttendanceRecord[]
+  attendanceMarks    AttendanceMark[]
+  assignments        Assignment[]
+  exams              Exam[]
+  grades             Grade[]
+  gpaRecords         GPARecord[]
+  notes              Note[]
+  tasks              Task[]
+  calendarEvents     CalendarEvent[]
+  expenses           Expense[]
+  customExpenseCategories CustomExpenseCategory[]
+  studySessions      StudySession[]
+  notifications      Notification[]
+  uploadedFiles      UploadedFile[]
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+model UserProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  displayName       String   @default("Student")
+  semesterStartDate String   @default("")
+  semesterEndDate   String   @default("")
+  avatarFileId      String?  @unique
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  avatarFile        UploadedFile? @relation("ProfileAvatar", fields: [avatarFileId], references: [id], onDelete: Restrict)
+}
+
+model UserSettings {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  pomodoroMode          String   @default("focus")
+  remainingSeconds      Int      @default(1500)
+  focusDurationSeconds  Int      @default(1500)
+  breakDurationSeconds  Int      @default(300)
+  pomodoroIsRunning     Boolean  @default(false)
+  pomodoroEndTime       String?
+  completedSessions     Int      @default(0)
+  dashboardOrder        String[] @default([])
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model StudentData {
+  userId          String   @id
+  revision        Int      @default(0)
+  legacyMigratedAt DateTime?
+  lastSyncedAt    DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Subject {
+  userId            String
+  code              String
+  name              String
+  credits           Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timetable         TimetableEntry[]
+  attendanceRecords AttendanceRecord[]
+  assignments       Assignment[]
+  exams             Exam[]
+  grades            Grade[]
+  notes             Note[]
+
+  @@id([userId, code])
+  @@index([code])
+}
+
+model TimetableEntry {
+  userId     String
+  id         String
+  day        String
+  startTime  String
+  endTime    String
+  courseCode String
+  courseName String
+  type       String
+  room       String
+  group      String?
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject    Subject  @relation(fields: [userId, courseCode], references: [userId, code], onDelete: Cascade)
+
+  @@id([userId, id])
+  @@index([userId, day, startTime])
+}
+
+model AttendanceRecord {
+  userId     String
+  courseCode String
+  attended   Int      @default(0)
+  total      Int      @default(0)
+  dutyLeave  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject    Subject  @relation(fields: [userId, courseCode], references: [userId, code], onDelete: Cascade)
+
+  @@id([userId, courseCode])
+}
+
+model AttendanceMark {
+  userId    String
+  markKey   String
+  status    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, markKey])
+  @@index([userId, status])
+}
+
+model Assignment {
+  userId     String
+  id         String
+  courseCode String
+  title      String
+  dueDate    String
+  priority   String
+  completed  Boolean  @default(false)
+  notes      String   @default("")
+  fileName   String?
+  fileId     String?  @unique
+  createdAt  String
+  storedAt   DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject    Subject  @relation(fields: [userId, courseCode], references: [userId, code], onDelete: Cascade)
+  uploadedFile UploadedFile? @relation("AssignmentAttachment", fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@id([userId, id])
+  @@index([userId, dueDate])
+}
+
+model Exam {
+  userId     String
+  id         String
+  courseCode String
+  type       String
+  date       String
+  startTime  String
+  room       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject    Subject  @relation(fields: [userId, courseCode], references: [userId, code], onDelete: Cascade)
+
+  @@id([userId, id])
+  @@index([userId, date])
+}
+
+model Grade {
+  userId     String
+  courseCode String
+  grade      String   @default("")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject    Subject  @relation(fields: [userId, courseCode], references: [userId, code], onDelete: Cascade)
+
+  @@id([userId, courseCode])
+}
+
+model GPARecord {
+  userId    String
+  id        String
+  term      String
+  value     Float
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, id])
+  @@unique([userId, term])
+}
+
+model Note {
+  userId     String
+  id         String
+  courseCode String
+  title      String
+  description String
+  fileName   String?
+  fileId     String?  @unique
+  date       String
+  pinned     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject    Subject  @relation(fields: [userId, courseCode], references: [userId, code], onDelete: Cascade)
+  uploadedFile UploadedFile? @relation("NoteAttachment", fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@id([userId, id])
+  @@index([userId, courseCode, pinned])
+}
+
+model Task {
+  userId    String
+  id        String
+  text      String
+  done      Boolean  @default(false)
+  createdAt String
+  storedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, id])
+  @@index([userId, done])
+}
+
+model CalendarEvent {
+  userId      String
+  id          String
+  title       String
+  description String?
+  startsAt    DateTime
+  endsAt      DateTime?
+  allDay      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, id])
+  @@index([userId, startsAt])
+}
+
+model Expense {
+  userId      String
+  id          String
+  description String
+  amount      Float
+  category    String
+  date        String
+  createdAt   String
+  storedAt    DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, id])
+  @@index([userId, date])
+}
+
+model CustomExpenseCategory {
+  userId    String
+  id        String
+  label     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, id])
+}
+
+model StudySession {
+  userId       String
+  id           String
+  startedAt    DateTime
+  endedAt      DateTime
+  durationSeconds Int
+  subjectCode  String?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, id])
+  @@index([userId, startedAt])
+}
+
+model Notification {
+  userId    String
+  id        String
+  title     String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, id])
+  @@index([userId, readAt])
+}
+
+model UploadedFile {
+  userId      String
+  id          String   @id
+  objectKey   String   @unique
+  fileName    String
+  contentType String
+  sizeBytes   Int
+  purpose     String
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  note        Note?    @relation("NoteAttachment")
+  assignment  Assignment? @relation("AssignmentAttachment")
+  profile     UserProfile? @relation("ProfileAvatar")
+
+  @@index([userId, createdAt])
+}

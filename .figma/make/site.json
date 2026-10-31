@@ -1,0 +1,11 @@
+{
+  "title": "StudentOS",
+  "description": "StudentOS — tactical, offline-first operating system interface for students.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

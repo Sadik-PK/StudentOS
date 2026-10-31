@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+@theme inline {
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --color-bg: #080b0f;
+  --color-surface: #0d1219;
+  --color-surface2: #111720;
+  --color-fg: #cdd5df;
+  --color-fg-muted: #4e5e72;
+  --color-fg-dim: #2a3548;
+  --color-border: #19222e;
+  --color-border2: #222e40;
+
+  --color-amber: #e8a020;
+  --color-amber-dim: #6b4b0e;
+  --color-red: #d93535;
+  --color-red-dim: #5c1a1a;
+  --color-green: #1ea854;
+  --color-green-dim: #0d4224;
+  --color-yellow: #c4870f;
+  --color-yellow-dim: #4a3208;
+  --color-blue: #3b82f6;
+  --color-blue-dim: #1e3a5f;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: #080b0f;
+  color: #cdd5df;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #19222e; border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: #222e40; }
+
+input, select, textarea {
+  background: #0d1219;
+  color: #cdd5df;
+  border: 1px solid #19222e;
+  font-family: inherit;
+  outline: none;
+  border-radius: 0;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: #e8a020;
+}
+
+input[type="checkbox"] {
+  accent-color: #e8a020;
+}
+
+select option {
+  background: #0d1219;
+  color: #cdd5df;
+}

@@ -1,0 +1,2 @@
+ALTER TABLE "UserSettings"
+ADD COLUMN "dashboardOrder" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
