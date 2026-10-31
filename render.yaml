@@ -14,6 +14,6 @@ services:
       - key: BETTER_AUTH_SECRET
         generateValue: true
       - key: BETTER_AUTH_URL
-        value: https://studentos-api.onrender.com
+        value: https://studentos-api-hkml.onrender.com
       - key: FRONTEND_ORIGINS
         value: https://student-os-phi-bice.vercel.app

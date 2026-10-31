@@ -95,7 +95,7 @@ The root `vercel.json` and `render.yaml` configure Vercel to serve the frontend 
 1. Push the project to GitHub and import the repository into Vercel. Vercel detects Vite and builds with `npm run build` to `dist`.
 2. Leave `VITE_API_URL` unset in Vercel so browser requests use the same-origin API proxy.
 3. Create a Render Blueprint from the same repository using `render.yaml`.
-4. In Render, set `DATABASE_URL` to the Neon pooled connection string and `DIRECT_URL` to the direct connection string. The blueprint sets `FRONTEND_ORIGINS` to the deployed Vercel production origin; update it if your Vercel domain changes. Render generates `BETTER_AUTH_SECRET`; the blueprint sets `BETTER_AUTH_URL` for `https://studentos-api.onrender.com`.
+4. In Render, set `DATABASE_URL` to the Neon pooled connection string and `DIRECT_URL` to the direct connection string. The blueprint sets `FRONTEND_ORIGINS` to the deployed Vercel production origin; update it if your Vercel domain changes. Render generates `BETTER_AUTH_SECRET`; the blueprint sets `BETTER_AUTH_URL` to the API service's public URL.
 5. If Render assigns a different service hostname, update `BETTER_AUTH_URL` in `render.yaml` and the API rewrite destination in `vercel.json`. Redeploy both services after changes.
 6. The Render start command runs `prisma migrate deploy` before starting the API. Check the Render health endpoint at `/api/health` and test registration, login, and cloud save from the Vercel site.
 
