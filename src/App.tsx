@@ -13,9 +13,11 @@ import GPA from "./pages/GPA"
 import Expenses from "./pages/Expenses"
 import StudyTimer from "./pages/StudyTimer"
 import Settings from "./pages/Settings"
+import Calendar from "./pages/Calendar"
 
 const NAV: { page: Page; label: string; icon: string }[] = [
   { page: "dashboard", label: "DASHBOARD", icon: "○" },
+  { page: "calendar", label: "CALENDAR", icon: "◷" },
   { page: "timetable", label: "TIMETABLE", icon: "▦" },
   { page: "attendance", label: "ATTENDANCE", icon: "▣" },
   { page: "assignments", label: "ASSIGNMENTS", icon: "▤" },
@@ -28,6 +30,7 @@ const NAV: { page: Page; label: string; icon: string }[] = [
 
 const PAGE_TITLES: Record<Page, string> = {
   dashboard: "DASHBOARD",
+  calendar: "UNIFIED CALENDAR",
   timetable: "TIMETABLE",
   attendance: "ATTENDANCE",
   assignments: "ASSIGNMENTS",
@@ -334,6 +337,9 @@ export default function App() {
               onNavigate={(p) => setPage(p as Page)}
               update={update}
             />
+          )}
+          {page === "calendar" && (
+            <Calendar state={state} update={update} onNavigate={(p) => setPage(p as Page)} />
           )}
           {page === "timetable" && <Timetable state={state} update={update} />}
           {page === "attendance" && (

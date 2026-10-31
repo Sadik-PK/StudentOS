@@ -3,7 +3,7 @@ export type ClassType = 'Lecture' | 'Tutorial' | 'Practical';
 export type Priority = 'high' | 'medium' | 'low';
 export type AttendanceMarkStatus = 'present' | 'absent';
 export type ExpenseCategory = 'food' | 'transport' | 'study' | 'housing' | 'health' | 'entertainment' | 'other' | `custom:${string}`;
-export type Page = 'dashboard' | 'timetable' | 'attendance' | 'assignments' | 'exams' | 'notes' | 'gpa' | 'expenses' | 'study-timer' | 'settings';
+export type Page = 'dashboard' | 'calendar' | 'timetable' | 'attendance' | 'assignments' | 'exams' | 'notes' | 'gpa' | 'expenses' | 'study-timer' | 'settings';
 
 export interface TimetableEntry {
   id: string;
@@ -39,6 +39,7 @@ export interface Assignment {
   priority: Priority;
   completed: boolean;
   notes: string;
+  reminderMinutes?: number;
   createdAt: string;
   fileId?: string;
   fileName?: string;
@@ -81,6 +82,7 @@ export type DashboardSection =
   | 'nextClass'
   | 'todaySchedule'
   | 'semesterProgress'
+  | 'calendar'
   | 'expenses'
   | 'attendance'
   | 'assignments'

@@ -63,6 +63,7 @@ describe("StudentOS state validation", () => {
           priority: "medium",
           completed: false,
           notes: "Review sections 1 and 2.",
+          reminderMinutes: 15,
           fileName: "reading.pdf",
           createdAt: "2026-10-30T00:00:00.000Z",
         },
@@ -84,6 +85,7 @@ describe("StudentOS state validation", () => {
 
     expect(parsed.assignments[0].notes).toBe("Review sections 1 and 2.");
     expect(parsed.assignments[0].fileName).toBe("reading.pdf");
+    expect(parsed.assignments[0].reminderMinutes).toBe(15);
     expect(parsed.notes[0].fileName).toBe("slides.pdf");
   });
 

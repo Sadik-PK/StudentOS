@@ -50,6 +50,8 @@ const assignmentSchema = z.object({
 
   notes: z.string().max(20000),
 
+  reminderMinutes: optionalValue(z.number().int().min(0).max(1440)),
+
   fileId: optionalValue(z.string().uuid()),
   fileName: optionalValue(z.string().max(255)),
   createdAt: z.string().min(1).max(50),
@@ -121,6 +123,7 @@ const dashboardSectionSchema = z.enum([
   "nextClass",
   "todaySchedule",
   "semesterProgress",
+  "calendar",
   "expenses",
   "attendance",
   "assignments",
@@ -156,7 +159,7 @@ export const appStateSchema = z
 
       profilePictureId: optionalValue(z.string().uuid()),
 
-      dashboardOrder: optionalValue(z.array(dashboardSectionSchema).max(8)),
+      dashboardOrder: optionalValue(z.array(dashboardSectionSchema).max(9)),
     }),
 
     todos: z.array(todoSchema).max(1000),

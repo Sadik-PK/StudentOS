@@ -25,6 +25,7 @@ export const DEFAULT_DASHBOARD_ORDER: DashboardSection[] = [
   'nextClass',
   'todaySchedule',
   'semesterProgress',
+  'calendar',
   'expenses',
   'attendance',
   'assignments',

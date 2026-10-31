@@ -15,6 +15,8 @@ import { prisma } from "./db.js"
 import { closeFileStorage, filesRouter } from "./routes/files.js"
 
 import { stateRouter } from "./routes/state.js"
+import { calendarRouter } from "./routes/calendar.js"
+import { dashboardRouter } from "./routes/dashboard.js"
 
 const app = express()
 
@@ -47,6 +49,10 @@ app.all("/api/auth/{*path}", toNodeHandler(auth))
 app.all("/api/auth", toNodeHandler(auth))
 
 app.use("/api/state", stateRouter)
+
+app.use("/api/calendar", calendarRouter)
+
+app.use("/api/dashboard", dashboardRouter)
 
 app.use("/api/files", filesRouter)
 

@@ -24,7 +24,7 @@ describe("new account defaults", () => {
   })
 
   it("defines every rearrangeable dashboard section exactly once", () => {
-    expect(DEFAULT_DASHBOARD_ORDER).toHaveLength(8)
+    expect(DEFAULT_DASHBOARD_ORDER).toHaveLength(9)
     expect(new Set(DEFAULT_DASHBOARD_ORDER).size).toBe(
       DEFAULT_DASHBOARD_ORDER.length,
     )

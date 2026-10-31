@@ -463,6 +463,7 @@ export async function loadUserState(userId: string) {
           "nextClass",
           "todaySchedule",
           "semesterProgress",
+          "calendar",
           "expenses",
           "attendance",
           "assignments",

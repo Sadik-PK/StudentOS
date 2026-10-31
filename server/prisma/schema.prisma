@@ -35,6 +35,7 @@ model User {
   studySessions      StudySession[]
   notifications      Notification[]
   uploadedFiles      UploadedFile[]
+  dashboardWorkspaces DashboardWorkspace[]
   aiDocuments        AiDocument[]
   aiConversations    AiConversation[]
   aiMessages         AiMessage[]
@@ -133,9 +134,29 @@ model UserSettings {
   pomodoroEndTime       String?
   completedSessions     Int      @default(0)
   dashboardOrder        String[] @default([])
+  activeDashboardWorkspaceId String?
+  calendarView          String   @default("agenda")
+  calendarVisibleSources String[] @default(["class", "assignment", "exam", "personal", "study"])
+  calendarVisibleCategories String[] @default(["personal", "college", "study", "work", "health", "other"])
+  calendarTimezone      String?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
   user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DashboardWorkspace {
+  userId    String
+  id        String
+  name      String
+  preset    String   @default("student")
+  layout    Json
+  revision  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, id])
+  @@index([userId, updatedAt])
 }
 
 model StudentData {
@@ -221,6 +242,7 @@ model Assignment {
   priority   String
   completed  Boolean  @default(false)
   notes      String   @default("")
+  reminderMinutes Int?
   fileName   String?
   fileId     String?  @unique
   createdAt  String
@@ -317,12 +339,29 @@ model CalendarEvent {
   startsAt    DateTime
   endsAt      DateTime?
   allDay      Boolean  @default(false)
+  startDate   String?
+  endDate     String?
+  category    String   @default("personal")
+  location    String?
+  color       String   @default("amber")
+  reminderMinutes Int?
+  recurrenceRule String @default("none")
+  recurrenceDays Int[] @default([])
+  recurrenceUntil String?
+  timeZone    String   @default("UTC")
+  excludedOccurrences String[] @default([])
+  seriesId    String?
+  seriesOccurrenceDate String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  series      CalendarEvent? @relation("CalendarEventSeries", fields: [userId, seriesId], references: [userId, id], onDelete: Cascade)
+  occurrences CalendarEvent[] @relation("CalendarEventSeries")
 
   @@id([userId, id])
   @@index([userId, startsAt])
+  @@index([userId, seriesId])
+  @@unique([userId, seriesId, seriesOccurrenceDate])
 }
 
 model Expense {

@@ -47,7 +47,11 @@ The Vite development server proxies `/api` requests to `http://localhost:3001`. 
 
 The existing React modules use the `AppState` contract in `src/types.ts`. `GET /api/state` loads that shape and `PUT /api/state` validates and atomically persists it into the normalized tables. Changes are automatically saved after a short debounce. A revision mismatch returns `409 Conflict`; the client keeps unsaved changes in memory and requires the user to export a backup or explicitly reload the cloud version rather than overwrite newer data. If connectivity fails, unsaved changes are not written to local storage and may be lost if the page closes before a successful save. All state and file routes authenticate the session and scope database queries by the authenticated user ID.
 
-Each account's dashboard section order is stored with its user settings. Use **Arrange** on the dashboard to move sections up or down; changes save with the rest of the account state.
+Dashboard workspaces store user-owned widget layouts, presets, sections, and per-widget settings in `DashboardWorkspace`. Layout edits are saved through authenticated `/api/dashboard/workspaces` routes with revision checks; the API initializes a default workspace from legacy dashboard ordering when needed. Workspaces are limited to 10 per account. Apply the additive dashboard workspace migration before deploying the API.
+
+The Unified Calendar combines timetable classes, assignment deadlines, exams, and user-owned personal or study events. Classes, assignments, and exams remain in their existing StudentOS records; edits from the calendar update those records through the normal cloud-state sync. Personal events and calendar preferences use authenticated `/api/calendar` endpoints and the existing calendar/settings tables. Calendar event timestamps are stored in UTC, all-day dates remain date-only, and recurring series are expanded only for the visible range. The additive calendar migration does not drop tables or existing data.
+
+Calendar and assignment-deadline reminders are in-app alerts while the calendar page is open; assignment reminders are timed relative to 9:00 AM on the due date. Background scheduling and push notifications are not implemented, so reminders are not guaranteed when the app is closed.
 
 The AI Study Assistant and Google Drive integration are disabled. Their Prisma models and applied migration files are intentionally retained; no tables or records are dropped. Existing Google Drive objects and their attachment metadata are left untouched, but this version cannot open those legacy attachments. New attachments use Cloudflare R2 when configured.
 
@@ -70,6 +74,8 @@ Endpoints:
 
 - Better Auth: `/api/auth/*` (email/password registration, login, session, logout)
 - Student data: `GET/PUT /api/state`, `POST /api/state/migrate`
+- Dashboard workspaces: `GET/POST /api/dashboard/workspaces`, `PATCH/DELETE /api/dashboard/workspaces/:id`, `POST /api/dashboard/workspaces/:id/duplicate`, `PATCH /api/dashboard/workspaces/:id/activate`
+- Calendar: `GET/PATCH /api/calendar/preferences`, `GET/POST /api/calendar/events`, `PATCH/DELETE /api/calendar/events/:id`
 - File storage: `POST /api/files/upload-url`, `POST /api/files/:id/complete`, `GET /api/files/:id/download-url`, `DELETE /api/files/:id`
 - Health: `GET /api/health`
 
