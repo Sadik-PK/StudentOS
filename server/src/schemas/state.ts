@@ -106,7 +106,7 @@ const todoSchema = z.object({
 const expenseSchema = z.object({
   id: z.string().min(1).max(128),
 
-  description: z.string().min(1).max(500),
+  description: z.string().max(500),
 
   amount: z.number().finite().min(0).max(1000000000),
 

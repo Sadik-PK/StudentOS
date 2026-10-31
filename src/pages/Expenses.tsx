@@ -85,7 +85,7 @@ export default function Expenses({ state, update }: Props) {
   function addExpense(event: FormEvent) {
     event.preventDefault();
     const parsedAmount = Number(amount);
-    if (!description.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !date) return;
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0 || !date) return;
 
     const expense: Expense = {
       id: crypto.randomUUID(),
@@ -181,7 +181,7 @@ export default function Expenses({ state, update }: Props) {
           </div>
           <div className="p-4 space-y-3">
             <label className="block">
-              <span className="font-mono text-[10px] text-[#4e5e72] block mb-1">DESCRIPTION</span>
+              <span className="font-mono text-[10px] text-[#4e5e72] block mb-1">DESCRIPTION (OPTIONAL)</span>
               <input
                 value={description}
                 onChange={event => setDescription(event.target.value)}
@@ -269,7 +269,7 @@ export default function Expenses({ state, update }: Props) {
           <div className="px-4 py-3 border-t border-[#19222e]">
             <button
               type="submit"
-              disabled={!description.trim() || Number(amount) <= 0 || !date}
+              disabled={!Number.isFinite(Number(amount)) || Number(amount) <= 0 || !date}
               className="w-full py-2 font-mono text-xs font-semibold bg-amber-400 text-[#090b0e] hover:bg-amber-300 disabled:bg-[#19222e] disabled:text-[#4e5e72] transition-colors">
               + COMMIT TRANSACTION
             </button>
@@ -304,7 +304,7 @@ export default function Expenses({ state, update }: Props) {
                     {new Date(`${expense.date}T00:00:00`).toLocaleDateString('en-GB')}
                   </span>
                   <div className="min-w-0">
-                    <p className="text-sm text-[#cdd5df] truncate">{expense.description}</p>
+                    <p className="text-sm text-[#cdd5df] truncate">{expense.description || 'No description'}</p>
                     <p className="sm:hidden font-mono text-[9px] text-[#4e5e72]">{expense.date}</p>
                   </div>
                   <span className={`hidden sm:block font-mono text-[10px] ${meta.text}`}>[{meta.label}]</span>

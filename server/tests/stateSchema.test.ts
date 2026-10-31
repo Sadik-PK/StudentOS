@@ -33,6 +33,24 @@ describe("StudentOS state validation", () => {
     expect(appStateSchema.safeParse(validState).success).toBe(true);
   });
 
+  it("accepts expenses without a description", () => {
+    const state = {
+      ...validState,
+      expenses: [
+        {
+          id: "expense-1",
+          description: "",
+          amount: 25,
+          category: "food",
+          date: "2026-10-31",
+          createdAt: "2026-10-31T00:00:00.000Z",
+        },
+      ],
+    };
+
+    expect(appStateSchema.safeParse(state).success).toBe(true);
+  });
+
   it("preserves assignment notes and note attachment names", () => {
     const state = {
       ...validState,

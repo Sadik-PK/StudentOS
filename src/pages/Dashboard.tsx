@@ -418,7 +418,7 @@ export default function Dashboard({ state, onNavigate, update }: Props) {
                 {recentExpenses.map(expense => (
                   <div key={expense.id} className="px-4 py-2.5 flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm text-[#cdd5df] truncate">{expense.description}</p>
+                      <p className="text-sm text-[#cdd5df] truncate">{expense.description || 'No description'}</p>
                       <p className="font-mono text-[9px] text-[#4e5e72]">
                         {expenseCategoryLabel(expense.category)} · {new Date(`${expense.date}T00:00:00`).toLocaleDateString('en-GB')}
                       </p>
