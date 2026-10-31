@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { lazy, Suspense, useEffect, useState } from "react"
 import { Page } from "./types"
 import { useAppStore } from "./store"
 import { authClient } from "./auth"
@@ -14,8 +14,11 @@ import Expenses from "./pages/Expenses"
 import StudyTimer from "./pages/StudyTimer"
 import Settings from "./pages/Settings"
 
+const AIStudy = lazy(() => import("./pages/AIStudy"))
+
 const NAV: { page: Page; label: string; icon: string }[] = [
   { page: "dashboard", label: "DASHBOARD", icon: "○" },
+  { page: "ai-study", label: "AI STUDY", icon: "✧" },
   { page: "timetable", label: "TIMETABLE", icon: "▦" },
   { page: "attendance", label: "ATTENDANCE", icon: "▣" },
   { page: "assignments", label: "ASSIGNMENTS", icon: "▤" },
@@ -28,6 +31,7 @@ const NAV: { page: Page; label: string; icon: string }[] = [
 
 const PAGE_TITLES: Record<Page, string> = {
   dashboard: "DASHBOARD",
+  "ai-study": "AI STUDY ASSISTANT",
   timetable: "TIMETABLE",
   attendance: "ATTENDANCE",
   assignments: "ASSIGNMENTS",
@@ -334,6 +338,17 @@ export default function App() {
               onNavigate={(p) => setPage(p as Page)}
               update={update}
             />
+          )}
+          {page === "ai-study" && (
+            <Suspense
+              fallback={
+                <div className="flex h-full items-center justify-center font-mono text-xs text-[#4e5e72]">
+                  LOADING AI STUDY ASSISTANT...
+                </div>
+              }
+            >
+              <AIStudy state={state} update={update} />
+            </Suspense>
           )}
           {page === "timetable" && <Timetable state={state} update={update} />}
           {page === "attendance" && (

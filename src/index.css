@@ -1,6 +1,68 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
+@import 'katex/dist/katex.min.css';
+@import 'highlight.js/styles/github-dark.css';
+
+.ai-markdown {
+  overflow-wrap: anywhere;
+}
+
+.ai-markdown h1,
+.ai-markdown h2,
+.ai-markdown h3 {
+  margin: 1.1em 0 0.45em;
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.ai-markdown h1 { font-size: 1.2rem; }
+.ai-markdown h2 { font-size: 1.05rem; }
+.ai-markdown h3 { font-size: 0.95rem; }
+.ai-markdown p,
+.ai-markdown ul,
+.ai-markdown ol,
+.ai-markdown blockquote {
+  margin: 0.65em 0;
+}
+
+.ai-markdown ul,
+.ai-markdown ol {
+  padding-left: 1.4em;
+}
+
+.ai-markdown ul { list-style: disc; }
+.ai-markdown ol { list-style: decimal; }
+.ai-markdown li { margin: 0.25em 0; }
+.ai-markdown a { color: #fbbf24; text-decoration: underline; }
+.ai-markdown blockquote {
+  border-left: 2px solid #fbbf24;
+  padding-left: 0.8em;
+  color: #94a3b8;
+}
+.ai-markdown :not(pre) > code {
+  border: 1px solid #263244;
+  background: #080b0f;
+  padding: 0.1em 0.3em;
+  color: #fbbf24;
+}
+.ai-markdown pre {
+  overflow-x: auto;
+  border: 1px solid #19222e;
+  background: #080b0f;
+  padding: 0.85em;
+}
+.ai-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+.ai-markdown th,
+.ai-markdown td {
+  border: 1px solid #263244;
+  padding: 0.4em 0.6em;
+}
 
 @theme inline {
   --font-sans: 'DM Sans', system-ui, sans-serif;

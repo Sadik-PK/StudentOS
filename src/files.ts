@@ -1,5 +1,6 @@
 import { apiRequest } from "./api";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const ACCEPTED_TYPES = new Set([
   "application/pdf",
@@ -19,14 +20,26 @@ export interface CloudFile {
   id: string;
   fileName: string;
   contentType: string;
-  purpose: "note" | "assignment" | "profile";
+  purpose: "note" | "assignment" | "profile" | "study-document";
 }
 
 interface SignedUpload {
   id: string;
-  url: string;
-  fields: Record<string, string>;
-  completeUrl: string;
+  uploadUrl: string;
+}
+
+function isCloudFile(value: unknown): value is CloudFile {
+  if (typeof value !== "object" || value === null) return false;
+  const file = value as Record<string, unknown>;
+  return (
+    typeof file.id === "string" &&
+    typeof file.fileName === "string" &&
+    typeof file.contentType === "string" &&
+    (file.purpose === "note" ||
+      file.purpose === "assignment" ||
+      file.purpose === "profile" ||
+      file.purpose === "study-document")
+  );
 }
 
 export async function uploadStudentFile(
@@ -51,21 +64,27 @@ export async function uploadStudentFile(
   });
 
   try {
-    const form = new FormData();
-    for (const [key, value] of Object.entries(signed.fields)) form.append(key, value);
-    form.append("file", file);
-
-    const upload = await fetch(signed.url, { method: "POST", body: form });
-    if (!upload.ok) throw new Error(`File upload failed with status ${upload.status}.`);
-
-    return await apiRequest<CloudFile>(signed.completeUrl, {
-      method: "POST",
-      body: JSON.stringify({
-        fileName: file.name,
-        contentType: file.type,
-        purpose,
-      }),
+    const upload = await fetch(`${API_BASE_URL}${signed.uploadUrl}`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": file.type },
+      body: file,
     });
+    const result: unknown = await upload.json().catch(() => null);
+    if (!upload.ok) {
+      const message =
+        typeof result === "object" &&
+        result !== null &&
+        "error" in result &&
+        typeof result.error === "string"
+          ? result.error
+          : `File upload failed with status ${upload.status}.`;
+      throw new Error(message);
+    }
+    if (!isCloudFile(result)) {
+      throw new Error("The server returned invalid uploaded-file metadata.");
+    }
+    return result;
   } catch (error) {
     try {
       await apiRequest<void>(`/api/files/${signed.id}`, { method: "DELETE" });
