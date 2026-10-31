@@ -1,6 +1,17 @@
 import { randomUUID } from "node:crypto"
 
-import express, { Router } from "express"
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3"
+
+import { createPresignedPost } from "@aws-sdk/s3-presigned-post"
+
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
+
+import { Router } from "express"
 
 import { z } from "zod"
 
@@ -9,13 +20,27 @@ import { env } from "../env.js"
 import { prisma } from "../db.js"
 
 import { requireAuth } from "../middleware/requireAuth.js"
-import {
-  deleteDriveFile,
-  downloadDriveFile,
-  uploadDriveFile,
-} from "../storage/googleDrive.js"
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024
+const storage =
+  env.R2_ENABLED &&
+  env.R2_ENDPOINT &&
+  env.R2_ACCESS_KEY_ID &&
+  env.R2_SECRET_ACCESS_KEY &&
+  env.R2_BUCKET
+    ? {
+        bucket: env.R2_BUCKET,
+        client: new S3Client({
+          region: "auto",
+          endpoint: env.R2_ENDPOINT,
+          forcePathStyle: true,
+          credentials: {
+            accessKeyId: env.R2_ACCESS_KEY_ID,
+            secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+          },
+        }),
+      }
+    : null;
 
 const allowedTypes = new Set([
   "application/pdf",
@@ -50,53 +75,24 @@ const uploadRequestSchema = z.object({
 
   sizeBytes: z.number().int().positive().max(MAX_FILE_BYTES),
 
-  purpose: z.enum(["note", "assignment", "profile", "study-document"]),
+  purpose: z.enum(["note", "assignment", "profile"]),
+})
+
+const completeRequestSchema = z.object({
+  fileName: z.string().min(1).max(255),
+
+  contentType: z
+    .string()
+    .refine((value) => allowedTypes.has(value), "Unsupported file type."),
+
+  purpose: z.enum(["note", "assignment", "profile"]),
 })
 
 export const filesRouter = Router()
 filesRouter.use(requireAuth)
 
-export async function readOwnedStudyFile(userId: string, fileId: string) {
-  const file = await prisma.uploadedFile.findFirst({
-    where: { id: fileId, userId, status: "complete", purpose: "study-document" },
-  });
-  if (!file) return null;
-
-  if (!env.GOOGLE_DRIVE_ENABLED) {
-    throw new Error("Google Drive file storage is not configured.");
-  }
-
-  const object = await downloadDriveFile(file.objectKey);
-  if (
-    object.bytes.length !== file.sizeBytes ||
-    object.contentType?.split(";")[0] !== file.contentType
-  ) {
-    throw new Error("The stored file does not match its metadata.");
-  }
-  return { file, bytes: object.bytes };
-}
-
-export async function deleteOwnedStudyFile(userId: string, fileId: string) {
-  const file = await prisma.uploadedFile.findFirst({
-    where: { id: fileId, userId, purpose: "study-document" },
-  });
-  if (!file) return false;
-  if (!env.GOOGLE_DRIVE_ENABLED) {
-    throw new Error("Google Drive file storage is not configured.");
-  }
-
-  const attached = await Promise.all([
-    prisma.note.findFirst({ where: { userId, fileId } }),
-    prisma.assignment.findFirst({ where: { userId, fileId } }),
-    prisma.userProfile.findFirst({ where: { userId, avatarFileId: fileId } }),
-  ]);
-  if (attached.some(Boolean)) {
-    throw new Error("This file is attached to another record and cannot be deleted.");
-  }
-
-  await deleteDriveFile(file.objectKey);
-  await prisma.uploadedFile.delete({ where: { id: fileId } });
-  return true;
+function getStorage() {
+  return storage;
 }
 
 function matchesFileSignature(contentType: string, fileName: string, bytes: Uint8Array) {
@@ -154,8 +150,10 @@ filesRouter.post("/upload-url", async (req, res, next) => {
     return
   }
 
-  if (!env.GOOGLE_DRIVE_ENABLED) {
-    res.status(503).json({ error: "Google Drive file storage is not configured." })
+  const storage = getStorage()
+
+  if (!storage) {
+    res.status(503).json({ error: "File storage is not configured." })
 
     return
   }
@@ -164,6 +162,22 @@ filesRouter.post("/upload-url", async (req, res, next) => {
     const id = randomUUID()
 
     const key = `${req.userId}/${id}`
+
+    const signedPost = await createPresignedPost(storage.client, {
+      Bucket: storage.bucket,
+
+      Key: key,
+
+      Expires: 300,
+
+      Fields: { "Content-Type": parsed.data.contentType },
+
+      Conditions: [
+        ["content-length-range", 1, MAX_FILE_BYTES],
+
+        ["eq", "$Content-Type", parsed.data.contentType],
+      ],
+    })
 
     await prisma.uploadedFile.create({
       data: {
@@ -185,82 +199,120 @@ filesRouter.post("/upload-url", async (req, res, next) => {
 
     res.json({
       id,
-      uploadUrl: `/api/files/${id}/content`,
+
+      url: signedPost.url,
+
+      fields: signedPost.fields,
+
+      completeUrl: `/api/files/${id}/complete`,
     })
   } catch (error) {
     next(error)
   }
 })
 
-filesRouter.put(
-  "/:id/content",
-  express.raw({ type: "*/*", limit: MAX_FILE_BYTES }),
-  async (req, res, next) => {
-    if (!env.GOOGLE_DRIVE_ENABLED) {
-      res.status(503).json({ error: "Google Drive file storage is not configured." })
-      return
-    }
+filesRouter.post("/:id/complete", async (req, res, next) => {
+  const parsed = completeRequestSchema.safeParse(req.body)
 
-    try {
-      const file = await prisma.uploadedFile.findFirst({
-        where: { id: req.params.id, userId: req.userId },
-      })
-      if (!file) {
-        res.status(404).json({ error: "Upload not found." })
-        return
-      }
-      if (file.status === "complete") {
-        res.status(409).json({ error: "This upload has already been completed." })
-        return
-      }
-      if (!Buffer.isBuffer(req.body) || req.body.length !== file.sizeBytes) {
-        res.status(400).json({ error: "Uploaded file size does not match its metadata." })
-        return
-      }
-      if (req.get("content-type")?.split(";")[0] !== file.contentType) {
-        res.status(400).json({ error: "Uploaded file type does not match its metadata." })
-        return
-      }
-      if (!matchesFileSignature(file.contentType, file.fileName, req.body)) {
-        res.status(400).json({ error: "File content does not match the permitted file type." })
-        return
-      }
+  if (!parsed.success) {
+    res
+      .status(400)
+      .json({ error: "Invalid file metadata.", details: parsed.error.issues })
 
-      const driveFileId = await uploadDriveFile(
-        file.id,
-        req.userId!,
-        file.fileName,
-        file.contentType,
-        req.body,
-      )
-      let completed
-      try {
-        completed = await prisma.uploadedFile.update({
-          where: { id: file.id },
-          data: { objectKey: driveFileId, status: "complete" },
-        })
-      } catch (error) {
-        try {
-          await deleteDriveFile(driveFileId)
-        } catch (cleanupError) {
-          console.error("Could not clean up an unregistered Google Drive file:", cleanupError)
-        }
-        throw error
-      }
-      const { objectKey: _objectKey, ...publicFile } = completed
-      res.status(201).json(publicFile)
-    } catch (error) {
-      next(error)
-    }
-  },
-)
-
-filesRouter.get("/:id/download-url", async (req, res, next) => {
-  if (!env.GOOGLE_DRIVE_ENABLED) {
-    res.status(503).json({ error: "Google Drive file storage is not configured." })
     return
   }
 
+  const storage = getStorage()
+
+  if (!storage) {
+    res.status(503).json({ error: "File storage is not configured." })
+
+    return
+  }
+
+  try {
+    const existing = await prisma.uploadedFile.findUnique({
+      where: { id: req.params.id },
+    })
+
+    if (!existing || existing.userId !== req.userId) {
+      res.status(404).json({ error: "Upload not found." })
+
+      return
+    }
+
+    if (existing.status === "complete") {
+      res.json(existing)
+
+      return
+    }
+
+    if (
+      existing.fileName !== parsed.data.fileName ||
+      existing.contentType !== parsed.data.contentType ||
+      existing.purpose !== parsed.data.purpose
+    ) {
+      res
+        .status(400)
+        .json({
+          error: "Uploaded file metadata does not match the signed upload.",
+        })
+
+      return
+    }
+
+    const listed = await storage.client.send(
+      new HeadObjectCommand({
+        Bucket: storage.bucket,
+
+        Key: existing.objectKey,
+      }),
+    )
+
+    if (
+      !listed.ContentLength ||
+      listed.ContentLength !== existing.sizeBytes ||
+      listed.ContentType !== existing.contentType
+    ) {
+      res
+        .status(400)
+        .json({ error: "Uploaded file does not match the permitted metadata." })
+
+      return
+    }
+
+    const object = await storage.client.send(
+      new GetObjectCommand({
+        Bucket: storage.bucket,
+        Key: existing.objectKey,
+      }),
+    )
+    const bytes = object.Body
+      ? await object.Body.transformToByteArray()
+      : new Uint8Array()
+    if (!matchesFileSignature(existing.contentType, existing.fileName, bytes)) {
+      await storage.client.send(
+        new DeleteObjectCommand({ Bucket: storage.bucket, Key: existing.objectKey }),
+      )
+      res
+        .status(400)
+        .json({ error: "File content does not match the permitted file type." })
+      return
+    }
+
+    const file = await prisma.uploadedFile.update({
+      where: { id: existing.id },
+
+      data: { status: "complete", sizeBytes: listed.ContentLength },
+    })
+
+    res.status(201).json(file)
+  } catch (error) {
+    next(error)
+  }
+})
+
+filesRouter.get("/:id/download-url", async (req, res, next) => {
   try {
     const file = await prisma.uploadedFile.findUnique({
       where: { id: req.params.id },
@@ -268,6 +320,15 @@ filesRouter.get("/:id/download-url", async (req, res, next) => {
 
     if (!file || file.userId !== req.userId) {
       res.status(404).json({ error: "File not found." })
+
+      return
+    }
+
+    if (!file.objectKey.startsWith(`${req.userId}/`)) {
+      res.status(410).json({
+        error:
+          "This attachment is stored in Google Drive, which is no longer connected. Its file and database record were not deleted.",
+      })
 
       return
     }
@@ -278,60 +339,35 @@ filesRouter.get("/:id/download-url", async (req, res, next) => {
       return
     }
 
-    res.json({
-      url: `/api/files/${encodeURIComponent(file.id)}/download`,
-      fileName: file.fileName,
-      contentType: file.contentType,
-    })
-  } catch (error) {
-    next(error)
-  }
-})
+    const storage = getStorage()
 
-filesRouter.get("/:id/download", async (req, res, next) => {
-  if (!env.GOOGLE_DRIVE_ENABLED) {
-    res.status(503).json({ error: "Google Drive file storage is not configured." })
-    return
-  }
+    if (!storage) {
+      res.status(503).json({ error: "File storage is not configured." })
 
-  try {
-    const file = await prisma.uploadedFile.findFirst({
-      where: {
-        id: req.params.id,
-        userId: req.userId,
-        status: "complete",
-      },
-    })
-    if (!file) {
-      res.status(404).json({ error: "File not found." })
       return
     }
-    const object = await downloadDriveFile(file.objectKey)
-    if (
-      object.bytes.length !== file.sizeBytes ||
-      object.contentType?.split(";")[0] !== file.contentType
-    ) {
-      throw new Error("Stored file does not match its metadata.")
-    }
-    res.setHeader("Content-Type", file.contentType)
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
+
+    const url = await getSignedUrl(
+      storage.client,
+      new GetObjectCommand({
+        Bucket: storage.bucket,
+
+        Key: file.objectKey,
+
+        ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
+
+        ResponseContentType: file.contentType,
+      }),
+      { expiresIn: 300 },
     )
-    res.setHeader("Content-Length", object.bytes.length)
-    res.send(Buffer.from(object.bytes))
+
+    res.json({ url, fileName: file.fileName, contentType: file.contentType })
   } catch (error) {
     next(error)
   }
 })
 
 filesRouter.delete("/:id", async (req, res, next) => {
-  if (!env.GOOGLE_DRIVE_ENABLED) {
-    res.status(503).json({ error: "Google Drive file storage is not configured." })
-
-    return
-  }
-
   try {
     const file = await prisma.uploadedFile.findUnique({
       where: { id: req.params.id },
@@ -343,20 +379,36 @@ filesRouter.delete("/:id", async (req, res, next) => {
       return
     }
 
-    const [note, assignment, profile, studyDocument] = await Promise.all([
+    if (!file.objectKey.startsWith(`${req.userId}/`)) {
+      res.status(410).json({
+        error:
+          "This attachment is stored in Google Drive, which is no longer connected. Its file and database record were not deleted.",
+      })
+
+      return
+    }
+
+    const storage = getStorage()
+
+    if (!storage) {
+      res.status(503).json({ error: "File storage is not configured." })
+
+      return
+    }
+
+    const [note, assignment, profile] = await Promise.all([
       prisma.note.findFirst({ where: { userId: req.userId!, fileId: file.id } }),
       prisma.assignment.findFirst({ where: { userId: req.userId!, fileId: file.id } }),
       prisma.userProfile.findFirst({ where: { userId: req.userId!, avatarFileId: file.id } }),
-      prisma.aiDocument.findFirst({ where: { userId: req.userId!, fileId: file.id } }),
     ])
-    if (note || assignment || profile || studyDocument) {
+    if (note || assignment || profile) {
       res.status(409).json({ error: "Remove this file from its attached record before deleting it." })
       return
     }
 
-    if (file.objectKey !== `${file.userId}/${file.id}`) {
-      await deleteDriveFile(file.objectKey)
-    }
+    await storage.client.send(
+      new DeleteObjectCommand({ Bucket: storage.bucket, Key: file.objectKey }),
+    )
 
     await prisma.uploadedFile.delete({
       where: { id: file.id },
@@ -367,3 +419,7 @@ filesRouter.delete("/:id", async (req, res, next) => {
     next(error)
   }
 })
+
+export async function closeFileStorage() {
+  storage?.client.destroy()
+}

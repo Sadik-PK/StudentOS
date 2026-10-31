@@ -3,7 +3,7 @@ export type ClassType = 'Lecture' | 'Tutorial' | 'Practical';
 export type Priority = 'high' | 'medium' | 'low';
 export type AttendanceMarkStatus = 'present' | 'absent';
 export type ExpenseCategory = 'food' | 'transport' | 'study' | 'housing' | 'health' | 'entertainment' | 'other' | `custom:${string}`;
-export type Page = 'dashboard' | 'ai-study' | 'timetable' | 'attendance' | 'assignments' | 'exams' | 'notes' | 'gpa' | 'expenses' | 'study-timer' | 'settings';
+export type Page = 'dashboard' | 'timetable' | 'attendance' | 'assignments' | 'exams' | 'notes' | 'gpa' | 'expenses' | 'study-timer' | 'settings';
 
 export interface TimetableEntry {
   id: string;

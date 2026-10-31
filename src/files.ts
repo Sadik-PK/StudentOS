@@ -1,6 +1,5 @@
 import { apiRequest } from "./api";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const ACCEPTED_TYPES = new Set([
   "application/pdf",
@@ -20,12 +19,14 @@ export interface CloudFile {
   id: string;
   fileName: string;
   contentType: string;
-  purpose: "note" | "assignment" | "profile" | "study-document";
+  purpose: "note" | "assignment" | "profile";
 }
 
 interface SignedUpload {
   id: string;
-  uploadUrl: string;
+  url: string;
+  fields: Record<string, string>;
+  completeUrl: string;
 }
 
 function isCloudFile(value: unknown): value is CloudFile {
@@ -37,8 +38,20 @@ function isCloudFile(value: unknown): value is CloudFile {
     typeof file.contentType === "string" &&
     (file.purpose === "note" ||
       file.purpose === "assignment" ||
-      file.purpose === "profile" ||
-      file.purpose === "study-document")
+      file.purpose === "profile")
+  );
+}
+
+function isSignedUpload(value: unknown): value is SignedUpload {
+  if (typeof value !== "object" || value === null) return false;
+  const upload = value as Record<string, unknown>;
+  return (
+    typeof upload.id === "string" &&
+    typeof upload.url === "string" &&
+    typeof upload.completeUrl === "string" &&
+    typeof upload.fields === "object" &&
+    upload.fields !== null &&
+    Object.values(upload.fields).every((field) => typeof field === "string")
   );
 }
 
@@ -53,7 +66,7 @@ export async function uploadStudentFile(
     throw new Error("Files must be smaller than 20 MiB.");
   }
 
-  const signed = await apiRequest<SignedUpload>("/api/files/upload-url", {
+  const signedResponse = await apiRequest<unknown>("/api/files/upload-url", {
     method: "POST",
     body: JSON.stringify({
       fileName: file.name,
@@ -63,28 +76,33 @@ export async function uploadStudentFile(
     }),
   });
 
+  if (!isSignedUpload(signedResponse)) {
+    throw new Error("The server returned invalid upload details.");
+  }
+
+  const signed = signedResponse;
+
   try {
-    const upload = await fetch(`${API_BASE_URL}${signed.uploadUrl}`, {
-      method: "PUT",
-      credentials: "include",
-      headers: { "Content-Type": file.type },
-      body: file,
+    const form = new FormData();
+    for (const [key, value] of Object.entries(signed.fields)) form.append(key, value);
+    form.append("file", file);
+
+    const upload = await fetch(signed.url, { method: "POST", body: form });
+    if (!upload.ok) throw new Error(`File upload failed with status ${upload.status}.`);
+
+    const fileResponse = await apiRequest<unknown>(signed.completeUrl, {
+      method: "POST",
+      body: JSON.stringify({
+        fileName: file.name,
+        contentType: file.type,
+        purpose,
+      }),
     });
-    const result: unknown = await upload.json().catch(() => null);
-    if (!upload.ok) {
-      const message =
-        typeof result === "object" &&
-        result !== null &&
-        "error" in result &&
-        typeof result.error === "string"
-          ? result.error
-          : `File upload failed with status ${upload.status}.`;
-      throw new Error(message);
-    }
-    if (!isCloudFile(result)) {
+    if (!isCloudFile(fileResponse)) {
       throw new Error("The server returned invalid uploaded-file metadata.");
     }
-    return result;
+
+    return fileResponse;
   } catch (error) {
     try {
       await apiRequest<void>(`/api/files/${signed.id}`, { method: "DELETE" });

@@ -12,11 +12,9 @@ import { env } from "./env.js"
 
 import { prisma } from "./db.js"
 
-import { filesRouter } from "./routes/files.js"
+import { closeFileStorage, filesRouter } from "./routes/files.js"
 
 import { stateRouter } from "./routes/state.js"
-import { aiRouter } from "./routes/ai.js"
-import { integrationsRouter } from "./routes/integrations.js"
 
 const app = express()
 
@@ -50,11 +48,7 @@ app.all("/api/auth", toNodeHandler(auth))
 
 app.use("/api/state", stateRouter)
 
-app.use("/api/ai", aiRouter)
-
 app.use("/api/files", filesRouter)
-
-app.use("/api/integrations", integrationsRouter)
 
 app.use((_req, res) => res.status(404).json({ error: "Not found." }))
 
@@ -77,6 +71,8 @@ const server = app.listen(env.PORT, () => {
 
 async function shutdown() {
   server.close()
+
+  await closeFileStorage()
 }
 
 process.on("SIGINT", () => void shutdown())

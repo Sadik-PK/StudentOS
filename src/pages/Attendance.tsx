@@ -112,7 +112,7 @@ export default function Attendance({ state, update }: Props) {
         ))}
       </div>
 
-      {/* Attendance Predictor (AI & Simulation Engine) */}
+      {/* Attendance prediction simulation */}
       <AttendancePredictor state={state} />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

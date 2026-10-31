@@ -17,27 +17,11 @@ services:
         value: https://studentos-api-hkml.onrender.com
       - key: FRONTEND_ORIGINS
         value: https://student-os-phi-bice.vercel.app
-      - key: AI_PROVIDER
-        value: gemini
-      - key: GEMINI_API_KEY
+      - key: R2_ENDPOINT
         sync: false
-      - key: OPENAI_API_KEY
+      - key: R2_ACCESS_KEY_ID
         sync: false
-      - key: AI_GEMINI_MODEL
-        value: gemini-2.5-flash
-      - key: AI_OPENAI_MODEL
-        value: gpt-4o-mini
-      - key: GOOGLE_DRIVE_CLIENT_ID
+      - key: R2_SECRET_ACCESS_KEY
         sync: false
-      - key: GOOGLE_DRIVE_CLIENT_SECRET
-        sync: false
-      - key: GOOGLE_DRIVE_REFRESH_TOKEN
-        sync: false
-      - key: GOOGLE_DRIVE_FOLDER_ID
-        sync: false
-      - key: GOOGLE_DRIVE_REDIRECT_URI
-        value: https://studentos-api-hkml.onrender.com/api/integrations/google-drive/callback
-      - key: GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY
-        sync: false
-      - key: GOOGLE_DRIVE_ADMIN_EMAIL
+      - key: R2_BUCKET
         sync: false

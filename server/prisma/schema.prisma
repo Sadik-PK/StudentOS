@@ -44,6 +44,7 @@ model User {
   aiRateLimitBuckets AiRateLimitBucket[]
 }
 
+// Retained for data safety while the Google Drive integration is disabled.
 model GoogleDriveCredential {
   id                 String   @id
   refreshTokenCiphertext String?
@@ -398,6 +399,7 @@ model UploadedFile {
   @@index([userId, createdAt])
 }
 
+// Retained for data safety while AI Study Assistant features are disabled.
 model AiDocument {
   id              String   @id
   userId          String
