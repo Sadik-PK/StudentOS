@@ -13,6 +13,13 @@ const mocks = vi.hoisted(() => ({
   disableCredentials: vi.fn(),
   clearAccessToken: vi.fn(),
   oauthConstructor: vi.fn(),
+  createOAuthState: vi.fn(),
+  findOAuthState: vi.fn(),
+  deleteOAuthStates: vi.fn(),
+  stateRecords: new Map<
+    string,
+    { adminUserId: string; expiresAt: Date }
+  >(),
 }));
 
 vi.mock("google-auth-library", () => ({
@@ -45,16 +52,26 @@ vi.mock("google-auth-library", () => ({
 vi.mock("../src/db.js", () => ({
   prisma: {
     user: { findUnique: mocks.userFindUnique },
+    googleDriveOAuthState: {
+      create: mocks.createOAuthState,
+      findUnique: mocks.findOAuthState,
+      deleteMany: mocks.deleteOAuthStates,
+    },
   },
 }));
 
 vi.mock("../src/middleware/requireAuth.js", () => ({
   requireAuth: (
     req: express.Request,
-    _res: express.Response,
+    res: express.Response,
     next: express.NextFunction,
   ) => {
-    req.userId = req.get("x-user-id") ?? undefined;
+    const userId = req.get("x-user-id");
+    if (!userId) {
+      res.status(401).json({ error: "Authentication required." });
+      return;
+    }
+    req.userId = userId;
     next();
   },
 }));
@@ -98,7 +115,51 @@ describe("Google Drive OAuth integration", () => {
 
     vi.resetModules();
     vi.clearAllMocks();
+    mocks.stateRecords.clear();
     driveVerificationStatus = 200;
+    mocks.createOAuthState.mockImplementation(
+      async ({
+        data,
+      }: {
+        data: { stateHash: string; adminUserId: string; expiresAt: Date };
+      }) => {
+        mocks.stateRecords.set(data.stateHash, {
+          adminUserId: data.adminUserId,
+          expiresAt: data.expiresAt,
+        });
+      },
+    );
+    mocks.findOAuthState.mockImplementation(
+      async ({ where }: { where: { stateHash: string } }) =>
+        mocks.stateRecords.get(where.stateHash) ?? null,
+    );
+    mocks.deleteOAuthStates.mockImplementation(
+      async ({
+        where,
+      }: {
+        where: {
+          stateHash?: string;
+          expiresAt?: { lte?: Date; gt?: Date };
+        };
+      }) => {
+        if (where.expiresAt?.lte) {
+          for (const [hash, record] of mocks.stateRecords) {
+            if (record.expiresAt <= where.expiresAt.lte) {
+              mocks.stateRecords.delete(hash);
+            }
+          }
+          return { count: 0 };
+        }
+        const record = where.stateHash
+          ? mocks.stateRecords.get(where.stateHash)
+          : null;
+        if (record && where.expiresAt?.gt && record.expiresAt > where.expiresAt.gt) {
+          mocks.stateRecords.delete(where.stateHash!);
+          return { count: 1 };
+        }
+        return { count: 0 };
+      },
+    );
     mocks.userFindUnique.mockImplementation(
       async ({ where }: { where: { id: string } }) =>
         where.id === "admin"
@@ -179,10 +240,20 @@ describe("Google Drive OAuth integration", () => {
     callback.searchParams.set("state", state);
     callback.searchParams.set("code", "one-time-authorization-code");
     return fetch(callback, {
-      headers: { cookie, "x-user-id": "admin" },
+      headers: { cookie },
       redirect: "manual",
     });
   }
+
+  test("requires a StudentOS session to start OAuth", async () => {
+    const response = await fetch(
+      `${baseUrl}/api/integrations/google-drive/connect`,
+      { redirect: "manual" },
+    );
+
+    expect(response.status).toBe(401);
+    expect(mocks.generateAuthUrl).not.toHaveBeenCalled();
+  });
 
   test("generates an offline drive.file authorization URL and secure state cookie", async () => {
     const response = await beginAuthorization();
@@ -234,7 +305,24 @@ describe("Google Drive OAuth integration", () => {
     expect(invalid.headers.get("set-cookie")).toContain("Max-Age=0");
   });
 
-  test("exchanges code, verifies Drive access, and never returns tokens", async () => {
+  test("rejects a callback with missing state without exchanging the code", async () => {
+    const connect = await beginAuthorization();
+    const callback = new URL(
+      `${baseUrl}/api/integrations/google-drive/callback`,
+    );
+    callback.searchParams.set("code", "one-time-authorization-code");
+    const cookie = connect.headers.get("set-cookie")!.split(";")[0]!;
+
+    const response = await fetch(callback, {
+      headers: { cookie },
+      redirect: "manual",
+    });
+
+    expect(response.status).toBe(400);
+    expect(mocks.getToken).not.toHaveBeenCalled();
+  });
+
+  test("callback runs without a StudentOS session, exchanges code and never returns tokens", async () => {
     const connect = await beginAuthorization();
     const response = await callbackWith(connect);
     const body = await response.text();
@@ -255,6 +343,28 @@ describe("Google Drive OAuth integration", () => {
       "admin",
     );
     expect(mocks.clearAccessToken).toHaveBeenCalled();
+  });
+
+  test("rejects expired state without exchanging the authorization code", async () => {
+    const connect = await beginAuthorization();
+    const stateHash = [...mocks.stateRecords.keys()][0];
+    expect(stateHash).toBeDefined();
+    mocks.stateRecords.get(stateHash!)!.expiresAt = new Date(Date.now() - 1_000);
+
+    const response = await callbackWith(connect);
+
+    expect(response.status).toBe(400);
+    expect(mocks.getToken).not.toHaveBeenCalled();
+  });
+
+  test("rejects a reused state without exchanging the authorization code again", async () => {
+    const connect = await beginAuthorization();
+    const firstCallback = await callbackWith(connect);
+    const replay = await callbackWith(connect);
+
+    expect(firstCallback.status).toBe(200);
+    expect(replay.status).toBe(400);
+    expect(mocks.getToken).toHaveBeenCalledTimes(1);
   });
 
   test("preserves an existing refresh token when Google omits a new one", async () => {

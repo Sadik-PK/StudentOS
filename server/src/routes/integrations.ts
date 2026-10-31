@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { OAuth2Client } from "google-auth-library";
 import { Router, type Request, type Response } from "express";
 import { env } from "../env.js";
@@ -18,7 +18,6 @@ const STATE_COOKIE_PATH = "/api/integrations/google-drive";
 const STATE_TTL_SECONDS = 10 * 60;
 
 export const integrationsRouter = Router();
-integrationsRouter.use(requireAuth);
 
 function isAdminConfigured() {
   return Boolean(env.GOOGLE_DRIVE_ADMIN_EMAIL);
@@ -136,6 +135,24 @@ function validState(received: unknown, cookieValue: string | null) {
   );
 }
 
+async function consumeOAuthState(received: unknown, cookieValue: string | null) {
+  if (typeof cookieValue !== "string" || !validState(received, cookieValue)) {
+    return null;
+  }
+
+  const stateHash = createHash("sha256").update(cookieValue).digest("hex");
+  const now = new Date();
+  const record = await prisma.googleDriveOAuthState.findUnique({
+    where: { stateHash },
+  });
+  if (!record || record.expiresAt <= now) return null;
+
+  const consumed = await prisma.googleDriveOAuthState.deleteMany({
+    where: { stateHash, expiresAt: { gt: now } },
+  });
+  return consumed.count === 1 ? record.adminUserId : null;
+}
+
 function callbackResponseHeaders(res: Response) {
   res.set({
     "Cache-Control": "no-store",
@@ -165,6 +182,7 @@ async function verifyDriveAccess(accessToken: string) {
 
 integrationsRouter.get(
   "/google-drive/connect",
+  requireAuth,
   async (req, res, next) => {
     try {
       if (!oauthClientIsConfigured() || !env.GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY) {
@@ -179,6 +197,17 @@ integrationsRouter.get(
       }
 
       const state = randomBytes(32).toString("base64url");
+      const now = new Date();
+      await prisma.googleDriveOAuthState.deleteMany({
+        where: { expiresAt: { lte: now } },
+      });
+      await prisma.googleDriveOAuthState.create({
+        data: {
+          stateHash: createHash("sha256").update(state).digest("hex"),
+          adminUserId: req.userId!,
+          expiresAt: new Date(now.getTime() + STATE_TTL_SECONDS * 1000),
+        },
+      });
       setStateCookie(res, state);
       const authorizationUrl = oauthClient().generateAuthUrl({
         response_type: "code",
@@ -204,13 +233,16 @@ integrationsRouter.get(
         callbackFailure(res, 503, "Google Drive OAuth setup is not configured.");
         return;
       }
-      if (!(await isDriveAdmin(req.userId!))) {
-        callbackFailure(res, 403, "Administrator access is required.");
+      const adminUserId = await consumeOAuthState(
+        req.query.state,
+        stateCookie(req),
+      );
+      if (!adminUserId) {
+        callbackFailure(res, 400, "Google Drive authorization state is invalid or expired.");
         return;
       }
-
-      if (!validState(req.query.state, stateCookie(req))) {
-        callbackFailure(res, 400, "Google Drive authorization state is invalid or expired.");
+      if (!(await isDriveAdmin(adminUserId))) {
+        callbackFailure(res, 403, "Administrator access is required.");
         return;
       }
       if (typeof req.query.error === "string") {
@@ -240,7 +272,7 @@ integrationsRouter.get(
       const { token } = await client.getAccessToken();
       if (!token) throw new Error("Google Drive access token is unavailable.");
       await verifyDriveAccess(token);
-      await saveGoogleDriveRefreshToken(refreshToken, req.userId!);
+      await saveGoogleDriveRefreshToken(refreshToken, adminUserId);
       clearGoogleDriveAccessToken();
 
       callbackFailure(
@@ -257,6 +289,7 @@ integrationsRouter.get(
 
 integrationsRouter.post(
   "/google-drive/disconnect",
+  requireAuth,
   async (req, res, next) => {
     try {
       if (!isTrustedBrowserOrigin(req)) {

@@ -54,6 +54,15 @@ model GoogleDriveCredential {
   updatedAt          DateTime @updatedAt
 }
 
+model GoogleDriveOAuthState {
+  stateHash   String   @id
+  adminUserId String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
 model Session {
   id        String   @id
   expiresAt DateTime
